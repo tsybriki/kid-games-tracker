@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#faf7f2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Игры">
+<title>Развивающие игры — трекер</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-inner">
+    <div class="appbar-top">
+      <h1>Игры с ребёнком</h1>
+      <button id="btnAdd" class="icon-btn" aria-label="Добавить занятие">＋</button>
+    </div>
+    <p class="today" id="todayLine"></p>
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="games" role="tab" aria-selected="true">Игры</button>
+      <button class="tab" data-tab="journal" role="tab" aria-selected="false">Журнал</button>
+      <button class="tab" data-tab="stats" role="tab" aria-selected="false">Сводка</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ============ ИГРЫ ============ -->
+  <section id="view-games" class="view is-active">
+    <div class="filters">
+      <input id="search" class="search" type="search" placeholder="Поиск занятия…" autocomplete="off" enterkeyhint="search">
+      <div id="catChips" class="chips" role="group" aria-label="Фильтр по категориям"></div>
+      <div id="statusChips" class="chips chips--status" role="group" aria-label="Фильтр по статусу"></div>
+    </div>
+    <div id="gameList" class="game-list"></div>
+    <p id="gameEmpty" class="empty" hidden>Ничего не найдено. Попробуйте другой фильтр или добавьте занятие.</p>
+  </section>
+
+  <!-- ============ ЖУРНАЛ ============ -->
+  <section id="view-journal" class="view">
+    <div class="journal-head">
+      <h2>Что играли</h2>
+      <div class="seg" role="group" aria-label="Период">
+        <button class="seg-btn is-active" data-range="7">7 дней</button>
+        <button class="seg-btn" data-range="30">30 дней</button>
+        <button class="seg-btn" data-range="all">Всё</button>
+      </div>
+    </div>
+    <div id="journalList" class="journal-list"></div>
+    <p id="journalEmpty" class="empty" hidden>Пока нет записей. Откройте раздел «Игры» и отметьте занятие.</p>
+  </section>
+
+  <!-- ============ СВОДКА ============ -->
+  <section id="view-stats" class="view">
+    <h2>Сводка</h2>
+    <div class="stat-row" id="statRow"></div>
+    <h3>По категориям</h3>
+    <div id="catStats" class="cat-stats"></div>
+    <h3>Управление</h3>
+    <div class="manage">
+      <button class="btn btn--ghost" id="btnAddCat">＋ Новая категория</button>
+      <button class="btn btn--ghost" id="btnExport">Экспорт данных (JSON)</button>
+      <button class="btn btn--ghost" id="btnImport">Импорт данных</button>
+      <input type="file" id="fileImport" accept="application/json" hidden>
+      <button class="btn btn--danger" id="btnReset">Сбросить всё</button>
+    </div>
+    <p class="hint">Данные хранятся только в этом браузере. Перед очисткой Safari сделайте «Экспорт данных».</p>
+  </section>
+</main>
+
+<!-- ============ SHEET: занятие ============ -->
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-grip"></div>
+    <h3 id="sheetTitle">Занятие</h3>
+    <p class="sheet-cat" id="sheetCat"></p>
+
+    <div class="sheet-block">
+      <label class="lbl">Сегодня играли</label>
+      <button id="btnMarkPlayed" class="btn btn--primary btn--wide">Отметить как сыгранное</button>
+    </div>
+
+    <div class="sheet-block" id="noteBlock" hidden>
+      <label class="lbl" for="noteInput">Что получилось</label>
+      <textarea id="noteInput" class="note" rows="3" placeholder="Например: уверенно держит ложку, но ещё путает цвета"></textarea>
+    </div>
+
+    <div class="sheet-block">
+      <label class="lbl">Статус занятия</label>
+      <div id="sheetStatuses" class="chips chips--status"></div>
+    </div>
+
+    <div class="sheet-block sheet-block--row">
+      <button class="btn btn--ghost" id="btnEditAct">Переименовать</button>
+      <button class="btn btn--danger" id="btnDelAct">Удалить</button>
+    </div>
+
+    <button class="btn btn--wide btn--plain" data-close>Закрыть</button>
+  </div>
+</div>
+
+<!-- ============ SHEET: новое занятие / категория ============ -->
+<div id="sheet2" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet2Title">
+    <div class="sheet-grip"></div>
+    <h3 id="sheet2Title">Новое занятие</h3>
+    <form id="formNew" class="form">
+      <label class="lbl" for="newName">Название занятия</label>
+      <input id="newName" class="input" type="text" required placeholder="Например: Переливание воды" enterkeyhint="done">
+
+      <label class="lbl" for="newCat">Категория</label>
+      <select id="newCat" class="input"></select>
+
+      <label class="lbl">Статус</label>
+      <div id="newStatuses" class="chips chips--status"></div>
+
+      <div class="sheet-block sheet-block--row">
+        <button type="button" class="btn btn--ghost" data-close>Отмена</button>
+        <button type="submit" class="btn btn--primary">Добавить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ SHEET: новая категория ============ -->
+<div id="sheet3" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet3Title">
+    <div class="sheet-grip"></div>
+    <h3 id="sheet3Title">Новая категория</h3>
+    <form id="formCat" class="form">
+      <label class="lbl" for="catName">Название</label>
+      <input id="catName" class="input" type="text" required placeholder="Например: Музыка" enterkeyhint="done">
+      <label class="lbl">Цвет</label>
+      <div id="colorPick" class="color-pick"></div>
+      <div class="sheet-block sheet-block--row">
+        <button type="button" class="btn btn--ghost" data-close>Отмена</button>
+        <button type="submit" class="btn btn--primary">Добавить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="seed.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

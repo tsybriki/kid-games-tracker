@@ -23,7 +23,9 @@ let ui = {
   actId: null,
   newStatus: 'done',
   newColor: '#b3543f',
-  date: todayKey()
+  date: todayKey(),
+  editMode: false,
+  dragId: null
 };
 let openCats = loadOpen();
 
@@ -62,6 +64,14 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const catById = id => S.categories.find(c => c.id === id);
 const actById = id => S.activities.find(a => a.id === id);
 const uid = p => p + Math.random().toString(36).slice(2, 9);
+
+function plural(n, one, few, many){
+  const m10 = n % 10, m100 = n % 100;
+  if(m10 === 1 && m100 !== 11) return one;
+  if(m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+function actWord(n){ return plural(n, 'занятие', 'занятия', 'занятий'); }
 
 function todayKey(){
   const d = new Date();
@@ -135,7 +145,8 @@ function renderGames(){
 
   $('#gameList').innerHTML = ordered.map(c => {
     const acts = groups.get(c.id);
-    const isOpen = searching || openCats.has(c.id);
+    const isOpen = searching || openCats.has(c.id) || ui.editMode;
+    const totalInCat = S.activities.filter(a => a.cat === c.id).length;
     const playedCount = acts.filter(a => playedToday.has(a.id)).length;
     const badgeText = future ? 'в плане' : 'сегодня';
 
@@ -145,13 +156,26 @@ function renderGames(){
         <span class="acc__bar" style="background:${c.color}"></span>
         <span class="acc__name">${esc(c.name)}</span>
         ${playedCount ? `<span class="acc__today">${playedCount} ${badgeText}</span>` : ''}
-        <span class="acc__count">${acts.length}</span>
-      </button>`;
+        <span class="acc__count">${ui.editMode ? totalInCat : acts.length}</span>
+      </button>` +
+      (ui.editMode
+        ? `<div class="acc__catmanage">
+             <button class="row__move" data-catmove="${c.id}" type="button" aria-label="Перенести занятия категории">⇅</button>
+             <button class="row__del" data-catdel="${c.id}" type="button" aria-label="Удалить категорию">✕</button>
+           </div>`
+        : '');
 
     const body = acts.map(a => {
       const st = STATUS[a.status] || STATUS.wip;
       const played = playedToday.has(a.id);
-      return `<div class="row">
+      const draggable = ui.editMode ? ' draggable="true"' : '';
+      const moveBtns = ui.editMode
+        ? `<button class="row__move" data-move="${a.id}" type="button" aria-label="Переместить">⇅</button>`
+        : '';
+      const delBtn = ui.editMode
+        ? `<button class="row__del" data-del="${a.id}" type="button" aria-label="Удалить занятие">✕</button>`
+        : '';
+      return `<div class="row" data-row="${a.id}"${draggable}>
         <button class="row__mark ${played ? 'is-on' : ''}" data-mark="${a.id}" type="button"
           aria-pressed="${played}" aria-label="${played ? 'Убрать отметку' : (future ? 'Добавить в план' : 'Отметить как сыгранное')}">
           <span class="row__tick" aria-hidden="true"></span>
@@ -160,6 +184,7 @@ function renderGames(){
           <span class="row__name">${esc(a.name)}</span>
           <span class="row__status badge badge--${st.cls}">${esc(st.label)}</span>
         </button>
+        ${moveBtns}${delBtn}
       </div>`;
     }).join('');
 
@@ -373,7 +398,7 @@ function setDate(k){
 
 /* ---------- sheets ---------- */
 function openSheet(id){ $(id).hidden = false; document.body.style.overflow = 'hidden'; }
-function closeAllSheets(){ $$('.sheet').forEach(s => s.hidden = true); document.body.style.overflow = ''; }
+function closeAllSheets(){ $$('.sheet').forEach(s => s.hidden = true); document.body.style.overflow = ''; ui.moveFromCat = null; }
 
 function openActSheet(id){
   const a = actById(id);
@@ -463,6 +488,100 @@ function toast(msg){
   toastTimer = setTimeout(() => { t.hidden = true; }, 2000);
 }
 
+/* ---------- управление списком ---------- */
+function setEditMode(on){
+  ui.editMode = on;
+  if(on) S.categories.forEach(c => openCats.add(c.id));
+  saveOpen();
+  render();
+  const btn = $('#btnEditMode');
+  btn.classList.toggle('is-on', on);
+  btn.setAttribute('aria-pressed', String(on));
+  btn.innerHTML = on
+    ? '<span class="editbtn__ico" aria-hidden="true">✓</span> Готово'
+    : '<span class="editbtn__ico" aria-hidden="true">✎</span> Управлять списком';
+}
+
+function moveActivity(id, catId){
+  const a = actById(id);
+  if(!a || a.cat === catId) return;
+  a.cat = catId;
+  save(); render();
+  toast('Перенесено');
+}
+
+function openCatDelete(catId){
+  const c = catById(catId);
+  if(!c) return;
+  const n = S.activities.filter(a => a.cat === catId).length;
+  const others = S.categories.filter(x => x.id !== catId);
+  $('#sheet4Title').textContent = `Категория «${c.name}»`;
+  $('#sheet4Sub').textContent = n
+    ? `В ней ${n} ${actWord(n)}. Выберите, куда их перенести, или удалите вместе с ними.`
+    : 'Категория пустая — её можно просто удалить.';
+  $('#catMoveTo').innerHTML = others.length
+    ? others.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')
+    : '<option value="">— нет других категорий —</option>';
+  $('#btnCatMove').disabled = !others.length;
+  $('#btnCatDeleteAll').textContent = n ? `Удалить категорию и ${n} ${actWord(n)}` : 'Удалить категорию';
+  ui.delCatId = catId;
+  openSheet('#sheet4');
+}
+
+function deleteCategory(catId){
+  S.activities = S.activities.filter(a => a.cat !== catId);
+  S.categories = S.categories.filter(c => c.id !== catId);
+  Object.keys(S.days).forEach(k => {
+    const ids = S.activities.map(a => a.id);
+    S.days[k] = S.days[k].filter(x => ids.includes(x.id));
+  });
+  openCats.delete(catId);
+  saveOpen(); save(); render();
+}
+
+/* перетаскивание: меняем порядок внутри категории */
+function reorder(dragId, targetId, catId){
+  const list = S.activities.filter(a => a.cat === catId);
+  const from = list.findIndex(a => a.id === dragId);
+  const to = list.findIndex(a => a.id === targetId);
+  if(from < 0 || to < 0 || from === to) return;
+  const moved = list.splice(from, 1)[0];
+  list.splice(to, 0, moved);
+  // пересобираем порядок массива activities по новому порядку внутри категории
+  const others = S.activities.filter(a => a.cat !== catId);
+  S.activities = others.concat(list);
+  save(); render();
+}
+
+function openMoveSheet(ids){
+  const arr = Array.isArray(ids) ? ids : [ids];
+  const first = actById(arr[0]);
+  const isMany = arr.length > 1;
+  const curCat = first ? first.cat : null;
+  $('#sheet5Title').textContent = isMany ? 'Перенести занятия' : 'Перенести в категорию';
+  $('#sheet5Sub').textContent = isMany
+    ? `${arr.length} ${actWord(arr.length)} — выберите новую категорию`
+    : (first ? first.name : '');
+
+  const targets = S.categories.filter(c => c.id !== curCat);
+  if(!targets.length){
+    $('#moveTargets').innerHTML = '<p class="sheet-cat">Нет других категорий. Сначала создайте категорию в разделе «Сводка».</p>';
+  }else{
+    $('#moveTargets').innerHTML = targets.map(c => {
+      const n = S.activities.filter(a => a.cat === c.id).length;
+      return `<button class="movetarget" data-target="${c.id}" type="button">
+        <span class="movetarget__bar" style="background:${c.color}"></span>
+        <span class="movetarget__name">${esc(c.name)}</span>
+        <span class="movetarget__n">${n}</span>
+      </button>`;
+    }).join('');
+  }
+  ui.moveIds = arr;
+  ui.moveSingle = isMany ? null : arr[0];
+  $('#moveOrder').hidden = isMany;
+  openSheet('#sheet5');
+}
+
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
   const tab = e.target.closest('.tab');
@@ -473,6 +592,47 @@ document.addEventListener('click', e => {
     $$('.view').forEach(v => v.classList.remove('is-active'));
     $('#view-' + ui.tab).classList.add('is-active');
     window.scrollTo(0,0);
+    return;
+  }
+
+  // режим редактирования
+  if(e.target.closest('#btnEditMode')){ setEditMode(!ui.editMode); return; }
+
+  // удалить занятие
+  const del = e.target.closest('[data-del]');
+  if(del){
+    e.stopPropagation();
+    const a = actById(del.dataset.del);
+    if(a && confirm(`Удалить занятие «${a.name}»?`)) deleteActivity(a.id);
+    return;
+  }
+
+  // перенести занятие
+  const move = e.target.closest('[data-move]');
+  if(move){
+    e.stopPropagation();
+    ui.moveFromCat = null;
+    openMoveSheet(move.dataset.move);
+    return;
+  }
+
+  // удалить категорию
+  const catDel = e.target.closest('[data-catdel]');
+  if(catDel){
+    e.stopPropagation();
+    openCatDelete(catDel.dataset.catdel);
+    return;
+  }
+
+  // перенести все занятия категории
+  const catMove = e.target.closest('[data-catmove]');
+  if(catMove){
+    e.stopPropagation();
+    const catId = catMove.dataset.catmove;
+    const ids = S.activities.filter(a => a.cat === catId).map(a => a.id);
+    if(!ids.length){ toast('Категория пустая'); return; }
+    ui.moveFromCat = catId;
+    openMoveSheet(ids);
     return;
   }
 
@@ -521,6 +681,25 @@ document.addEventListener('click', e => {
     seg.classList.add('is-active');
     ui.range = seg.dataset.range;
     renderJournal();
+    return;
+  }
+
+  const target = e.target.closest('[data-target]');
+  if(target){
+    const ids = ui.moveIds || [];
+    ids.forEach(id => { const a = actById(id); if(a) a.cat = target.dataset.target; });
+    // если переносили всю категорию — убираем пустую исходную
+    if(ui.moveFromCat){
+      const left = S.activities.filter(a => a.cat === ui.moveFromCat).length;
+      if(!left){
+        S.categories = S.categories.filter(c => c.id !== ui.moveFromCat);
+        openCats.delete(ui.moveFromCat);
+        saveOpen();
+      }
+      ui.moveFromCat = null;
+    }
+    save(); render(); closeAllSheets();
+    toast('Перенесено');
     return;
   }
 
@@ -667,6 +846,49 @@ $('#fileImport').addEventListener('change', e => {
   e.target.value = '';
 });
 
+function shiftInCat(id, dir){
+  const a = actById(id);
+  if(!a) return;
+  const list = S.activities.filter(x => x.cat === a.cat);
+  const i = list.findIndex(x => x.id === id);
+  const j = i + dir;
+  if(j < 0 || j >= list.length){ toast(dir < 0 ? 'Уже первое' : 'Уже последнее'); return; }
+  const moved = list.splice(i, 1)[0];
+  list.splice(j, 0, moved);
+  const others = S.activities.filter(x => x.cat !== a.cat);
+  S.activities = others.concat(list);
+  save(); render();
+  toast(dir < 0 ? 'Выше' : 'Ниже');
+}
+
+$('#btnMoveUp').addEventListener('click', () => {
+  if(ui.moveSingle) shiftInCat(ui.moveSingle, -1);
+});
+$('#btnMoveDown').addEventListener('click', () => {
+  if(ui.moveSingle) shiftInCat(ui.moveSingle, 1);
+});
+
+$('#btnCatMove').addEventListener('click', () => {
+  const to = $('#catMoveTo').value;
+  if(!to) return;
+  const from = ui.delCatId;
+  S.activities.forEach(a => { if(a.cat === from) a.cat = to; });
+  S.categories = S.categories.filter(c => c.id !== from);
+  openCats.delete(from);
+  saveOpen(); save(); render(); closeAllSheets();
+  toast('Занятия перенесены');
+});
+
+$('#btnCatDeleteAll').addEventListener('click', () => {
+  const from = ui.delCatId;
+  const c = catById(from);
+  const n = S.activities.filter(a => a.cat === from).length;
+  if(!confirm(`Удалить категорию «${c ? c.name : ''}»${n ? ` и ${n} ${actWord(n)}` : ''}? Это необратимо.`)) return;
+  deleteCategory(from);
+  closeAllSheets();
+  toast('Удалено');
+});
+
 $('#btnReset').addEventListener('click', () => {
   if(!confirm('Удалить все данные и вернуть исходный список из 54 занятий?')) return;
   localStorage.removeItem(KEY);
@@ -674,6 +896,48 @@ $('#btnReset').addEventListener('click', () => {
   S.days = {};
   save(); render();
   toast('Сброшено');
+});
+
+/* ---------- drag & drop (сортировка) ---------- */
+document.addEventListener('dragstart', e => {
+  const row = e.target.closest('[data-row]');
+  if(!row || !ui.editMode) return;
+  ui.dragId = row.dataset.row;
+  row.classList.add('is-dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try{ e.dataTransfer.setData('text/plain', ui.dragId); }catch(err){}
+});
+
+document.addEventListener('dragend', e => {
+  document.querySelectorAll('.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+  document.querySelectorAll('.row--over').forEach(el => el.classList.remove('row--over'));
+  ui.dragId = null;
+});
+
+document.addEventListener('dragover', e => {
+  if(!ui.editMode || !ui.dragId) return;
+  const row = e.target.closest('[data-row]');
+  if(!row || row.dataset.row === ui.dragId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.row--over').forEach(el => el.classList.remove('row--over'));
+  row.classList.add('row--over');
+});
+
+document.addEventListener('drop', e => {
+  if(!ui.editMode || !ui.dragId) return;
+  const row = e.target.closest('[data-row]');
+  if(!row) return;
+  e.preventDefault();
+  const dragId = ui.dragId;
+  const targetId = row.dataset.row;
+  const dragAct = actById(dragId);
+  const targetAct = actById(targetId);
+  if(dragAct && targetAct){
+    if(dragAct.cat === targetAct.cat) reorder(dragId, targetId, dragAct.cat);
+    else moveActivity(dragId, targetAct.cat);
+  }
+  document.querySelectorAll('.row--over').forEach(el => el.classList.remove('row--over'));
 });
 
 /* ---------- boot ---------- */

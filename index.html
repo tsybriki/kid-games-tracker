@@ -61,6 +61,9 @@
         <div id="statusChips" class="chips chips--scroll" role="group" aria-label="Фильтр по статусу"></div>
         <button id="btnExpandAll" class="linkbtn" type="button">Развернуть</button>
       </div>
+      <button id="btnEditMode" class="editbtn" type="button" aria-pressed="false">
+        <span class="editbtn__ico" aria-hidden="true">✎</span> Управлять списком
+      </button>
     </div>
 
     <!-- план на будущее -->
@@ -184,6 +187,47 @@
         <button type="submit" class="btn btn--primary">Добавить</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ============ SHEET: удаление категории ============ -->
+<div id="sheet4" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet4Title">
+    <div class="sheet-grip"></div>
+    <h3 id="sheet4Title">Удалить категорию</h3>
+    <p class="sheet-cat" id="sheet4Sub"></p>
+
+    <label class="lbl" for="catMoveTo">Перенести занятия в</label>
+    <select id="catMoveTo" class="input"></select>
+
+    <div class="sheet-block sheet-block--row">
+      <button class="btn btn--ghost" data-close>Отмена</button>
+      <button class="btn btn--primary" id="btnCatMove">Перенести</button>
+    </div>
+
+    <button class="btn btn--wide btn--danger" id="btnCatDeleteAll">Удалить вместе с занятиями</button>
+  </div>
+</div>
+
+<!-- ============ SHEET: перенос ============ -->
+<div id="sheet5" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet5Title">
+    <div class="sheet-grip"></div>
+    <h3 id="sheet5Title">Перенести в категорию</h3>
+    <p class="sheet-cat" id="sheet5Sub"></p>
+
+    <div id="moveOrder" class="moveorder" hidden>
+      <label class="lbl">Позиция в категории</label>
+      <div class="moveorder__row">
+        <button class="btn btn--ghost" id="btnMoveUp" type="button">↑ Выше</button>
+        <button class="btn btn--ghost" id="btnMoveDown" type="button">↓ Ниже</button>
+      </div>
+    </div>
+
+    <div id="moveTargets" class="movetargets"></div>
+    <button class="btn btn--wide btn--plain" data-close>Закрыть</button>
   </div>
 </div>
 

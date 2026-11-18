@@ -1,4 +1,4 @@
-const CACHE = 'kid-games-v1';
+const CACHE = 'kid-games-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-512-maskable.png',
   './icons/apple-touch-icon.png'
 ];
 
@@ -34,7 +35,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if(url.origin !== self.location.origin) return;
 
-  // cache-first для статики, network-first для навигации
+  // навигация: сначала сеть, при отсутствии сети — кэш
   if(req.mode === 'navigate'){
     e.respondWith(
       fetch(req)
@@ -48,6 +49,24 @@ self.addEventListener('fetch', e => {
     return;
   }
 
+  // код приложения: всегда сначала сеть, иначе обновления не доедут до телефона
+  const isCode = /\.(js|css)$/.test(url.pathname);
+  if(isCode){
+    e.respondWith(
+      fetch(req)
+        .then(res => {
+          if(res.ok){
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // остальное (иконки, манифест): cache-first
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => {
       if(res.ok){

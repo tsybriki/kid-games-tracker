@@ -101,6 +101,39 @@ main{max-width:720px;margin:0 auto;padding:16px 16px calc(40px + var(--safe-b))}
 .chip:active{transform:scale(.96)}
 .chip.is-on{background:var(--ink);border-color:var(--ink);color:#fff}
 
+/* ---------- выбор даты ---------- */
+.datebar-wrap{margin-bottom:12px}
+.datebar{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:8px;box-shadow:var(--shadow);
+}
+.datebar__nav{
+  flex:0 0 40px;width:40px;height:40px;border-radius:11px;
+  border:1px solid var(--line);background:var(--surface);
+  font-size:22px;line-height:1;color:var(--ink-2);
+  display:grid;place-items:center;cursor:pointer;padding:0;
+}
+.datebar__nav:active{background:var(--surface-2);transform:scale(.94)}
+.datebar__nav:disabled{opacity:.3;cursor:default}
+.datebar__center{flex:1;min-width:0;position:relative;text-align:center}
+.datebar__label{
+  appearance:none;border:0;background:transparent;font:inherit;color:inherit;
+  cursor:pointer;padding:4px 6px;border-radius:9px;width:100%;
+}
+.datebar__label:active{background:var(--surface-2)}
+.datebar__day{display:block;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.datebar__sub{display:block;font-size:12px;color:var(--ink-3);margin-top:1px}
+.datebar__input{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;border:0;padding:0;cursor:pointer;
+}
+.datebar__input::-webkit-calendar-picker-indicator{opacity:0;width:100%;height:100%;cursor:pointer}
+
+.datequick{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.datequick::-webkit-scrollbar{display:none}
+.datequick .chip{flex:0 0 auto}
+
 /* ---------- последние дни ---------- */
 .recent{
   background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
@@ -109,6 +142,9 @@ main{max-width:720px;margin:0 auto;padding:16px 16px calc(40px + var(--safe-b))}
 .recent__title{font-size:15px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em}
 .recent__empty{font-size:13.5px;color:var(--ink-3);margin:0;line-height:1.5}
 .recent.is-empty{background:var(--surface-2);box-shadow:none}
+.recent--plan{border-style:dashed;background:var(--surface-2);box-shadow:none}
+.recent--plan .recent__title{color:var(--accent)}
+.recent--plan .rday + .rday{border-top-color:var(--line)}
 
 .rday + .rday{margin-top:12px;padding-top:12px;border-top:1px solid var(--surface-2)}
 .rday__date{font-size:12.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
@@ -192,6 +228,9 @@ h3{font-size:15px;font-weight:700;margin:26px 0 10px;letter-spacing:-.01em}
 .day{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
 .day__head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface-2)}
 .day__date{font-weight:700;font-size:14.5px;letter-spacing:-.01em}
+.day--future{border-style:dashed;background:var(--surface-2)}
+.day--future .day__head{background:transparent}
+.day--future .day__date{color:var(--accent)}
 .day__items{padding:4px 0}
 .day__item{display:flex;align-items:baseline;gap:10px;padding:9px 14px}
 .day__item + .day__item{border-top:1px solid var(--surface-2)}

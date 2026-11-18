@@ -15,7 +15,7 @@
 </head>
 <body>
 
-<header class="appbar">
+<header class="appbar" id="appbar">
   <div class="appbar-inner">
     <div class="appbar-top">
       <h1>Игры с ребёнком</h1>
@@ -34,6 +34,27 @@
   <!-- ============ ИГРЫ ============ -->
   <section id="view-games" class="view is-active">
 
+    <!-- выбор даты -->
+    <div class="datebar-wrap">
+      <div class="datebar" id="datebar">
+        <button class="datebar__nav" id="datePrev" type="button" aria-label="Предыдущий день">‹</button>
+        <div class="datebar__center">
+          <button class="datebar__label" id="dateLabel" type="button">
+            <span class="datebar__day" id="dateMain"></span>
+            <span class="datebar__sub" id="dateSub"></span>
+          </button>
+          <input type="date" id="datePick" class="datebar__input" aria-label="Выбрать дату">
+        </div>
+        <button class="datebar__nav" id="dateNext" type="button" aria-label="Следующий день">›</button>
+      </div>
+      <div class="datequick" id="dateQuick">
+        <button class="chip" data-qd="yesterday" type="button">Вчера</button>
+        <button class="chip" data-qd="today" type="button">Сегодня</button>
+        <button class="chip" data-qd="tomorrow" type="button">Завтра</button>
+        <button class="chip" data-qd="week" type="button">Через неделю</button>
+      </div>
+    </div>
+
     <div class="filters">
       <input id="search" class="search" type="search" placeholder="Поиск занятия…" autocomplete="off" enterkeyhint="search">
       <div class="toolrow">
@@ -42,11 +63,17 @@
       </div>
     </div>
 
-    <!-- что играли в последние дни -->
+    <!-- план на будущее -->
+    <section id="planBlock" class="recent recent--plan" hidden>
+      <h2 class="recent__title">План на будущее</h2>
+      <div id="planList" class="recent__list"></div>
+    </section>
+
+    <!-- что играли в прошлые дни -->
     <section id="recentBlock" class="recent">
       <h2 class="recent__title">В последние дни</h2>
       <div id="recentList" class="recent__list"></div>
-      <p id="recentEmpty" class="recent__empty">Пока ничего не отмечено. Раскройте категорию и нажмите на кружок рядом с игрой.</p>
+      <p id="recentEmpty" class="recent__empty"></p>
     </section>
 
     <div id="gameList" class="acc"></div>
@@ -94,12 +121,12 @@
     <p class="sheet-cat" id="sheetCat"></p>
 
     <div class="sheet-block">
-      <label class="lbl">Сегодня играли</label>
+      <label class="lbl" id="lblPlayed">Отметка</label>
       <button id="btnMarkPlayed" class="btn btn--primary btn--wide">Отметить как сыгранное</button>
     </div>
 
     <div class="sheet-block" id="noteBlock" hidden>
-      <label class="lbl" for="noteInput">Что получилось</label>
+      <label class="lbl" for="noteInput" id="lblNote">Что получилось</label>
       <textarea id="noteInput" class="note" rows="3" placeholder="Например: уверенно держит ложку, но ещё путает цвета"></textarea>
     </div>
 

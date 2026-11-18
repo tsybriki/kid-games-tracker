@@ -22,7 +22,8 @@ let ui = {
   range: '7',
   actId: null,
   newStatus: 'done',
-  newColor: '#b3543f'
+  newColor: '#b3543f',
+  date: todayKey()
 };
 let openCats = loadOpen();
 
@@ -66,6 +67,27 @@ function todayKey(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+function shiftDate(key, n){
+  const [y,m,d] = key.split('-').map(Number);
+  const dt = new Date(y, m-1, d+n);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+function isFuture(key){ return key > todayKey(); }
+function dayLabel(key){
+  const t = todayKey();
+  if(key === t) return 'Сегодня';
+  if(key === shiftDate(t,-1)) return 'Вчера';
+  if(key === shiftDate(t,1)) return 'Завтра';
+  if(key === shiftDate(t,-2)) return 'Позавчера';
+  if(key === shiftDate(t,2)) return 'Послезавтра';
+  return null;
+}
+function dateFullLabel(key){
+  const dl = dayLabel(key);
+  const [y,m,d] = key.split('-').map(Number);
+  const wd = DOW[new Date(y, m-1, d).getDay()];
+  return dl ? `${dl}, ${d} ${MONTHS[m-1]}` : `${d} ${MONTHS[m-1]}, ${wd}`;
+}
 function fmtDate(key){
   const [y,m,d] = key.split('-').map(Number);
   const dt = new Date(y, m-1, d);
@@ -97,8 +119,9 @@ function renderGames(){
     return true;
   });
 
-  const tk = todayKey();
+  const tk = ui.date;
   const playedToday = new Set((S.days[tk] || []).map(x => x.id));
+  const future = isFuture(tk);
 
   const groups = new Map();
   list.forEach(a => {
@@ -114,13 +137,14 @@ function renderGames(){
     const acts = groups.get(c.id);
     const isOpen = searching || openCats.has(c.id);
     const playedCount = acts.filter(a => playedToday.has(a.id)).length;
+    const badgeText = future ? 'в плане' : 'сегодня';
 
     const head =
       `<button class="acc__head" data-toggle="${c.id}" type="button" aria-expanded="${isOpen}">
         <span class="acc__chevron" aria-hidden="true"></span>
         <span class="acc__bar" style="background:${c.color}"></span>
         <span class="acc__name">${esc(c.name)}</span>
-        ${playedCount ? `<span class="acc__today">${playedCount} сегодня</span>` : ''}
+        ${playedCount ? `<span class="acc__today">${playedCount} ${badgeText}</span>` : ''}
         <span class="acc__count">${acts.length}</span>
       </button>`;
 
@@ -129,7 +153,7 @@ function renderGames(){
       const played = playedToday.has(a.id);
       return `<div class="row">
         <button class="row__mark ${played ? 'is-on' : ''}" data-mark="${a.id}" type="button"
-          aria-pressed="${played}" aria-label="${played ? 'Убрать отметку' : 'Отметить как сыгранное'}">
+          aria-pressed="${played}" aria-label="${played ? 'Убрать отметку' : (future ? 'Добавить в план' : 'Отметить как сыгранное')}">
           <span class="row__tick" aria-hidden="true"></span>
         </button>
         <button class="row__main" data-open="${a.id}" type="button">
@@ -161,9 +185,11 @@ function renderStatusChips(){
 
 /* ---------- render: последние дни ---------- */
 function renderRecent(){
-  const tk = todayKey();
-  const days = daysAgo(14);
-  const keys = days.filter(k => (S.days[k] || []).length).reverse();
+  const today = todayKey();
+  // «в последние дни» — прошлое до сегодня, без будущих планов
+  const past = [];
+  for(let i=1;i<=14;i++) past.push(shiftDate(today, -i));
+  const keys = past.filter(k => (S.days[k] || []).length).reverse();
 
   if(!keys.length){
     $('#recentList').innerHTML = '';
@@ -183,10 +209,41 @@ function renderRecent(){
       const note = it.note ? `<span class="rday__note">${esc(it.note)}</span>` : '';
       return `<li class="rday__item">${dot}<span class="rday__name">${esc(name)}</span>${note}</li>`;
     }).join('');
-    const rel = k === tk ? 'Сегодня' : shortDate(k);
-    const wd = k === tk ? '' : DOW[new Date(...k.split('-').map((v,i)=> i===1 ? +v-1 : +v)).getDay()];
+    const rel = shortDate(k);
+    const wd = DOW[new Date(...k.split('-').map((v,i)=> i===1 ? +v-1 : +v)).getDay()];
     return `<div class="rday">
       <div class="rday__date">${esc(rel)}${wd ? ' · ' + esc(wd) : ''}</div>
+      <ul class="rday__items">${items}</ul>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- render: план на будущее ---------- */
+function renderPlan(){
+  const today = todayKey();
+  const futureKeys = Object.keys(S.days)
+    .filter(k => k > today && (S.days[k]||[]).length)
+    .sort();
+
+  if(!futureKeys.length){
+    $('#planBlock').hidden = true;
+    return;
+  }
+  $('#planBlock').hidden = false;
+
+  $('#planList').innerHTML = futureKeys.map(k => {
+    const items = S.days[k].map(it => {
+      const a = actById(it.id);
+      const c = a ? catById(a.cat) : null;
+      const name = a ? a.name : '(удалённое занятие)';
+      const dot = c ? `<span class="rday__dot" style="background:${c.color}"></span>` : '';
+      const note = it.note ? `<span class="rday__note">${esc(it.note)}</span>` : '';
+      return `<li class="rday__item">${dot}<span class="rday__name">${esc(name)}</span>${note}</li>`;
+    }).join('');
+    const dl = dayLabel(k);
+    const wd = DOW[new Date(...k.split('-').map((v,i)=> i===1 ? +v-1 : +v)).getDay()];
+    return `<div class="rday">
+      <div class="rday__date">${esc(dl || shortDate(k))}${dl ? ' · ' + esc(wd) : ''}</div>
       <ul class="rday__items">${items}</ul>
     </div>`;
   }).join('');
@@ -196,10 +253,14 @@ function renderRecent(){
 function renderJournal(){
   let keys = Object.keys(S.days).filter(k => (S.days[k] || []).length).sort().reverse();
   if(ui.range !== 'all'){
-    const allow = new Set(daysAgo(parseInt(ui.range, 10)));
+    const n = parseInt(ui.range, 10);
+    const allow = new Set(daysAgo(n));
+    // планы на ближайшие дни тоже показываем
+    const today = todayKey();
+    for(let i=1;i<=n;i++) allow.add(shiftDate(today, i));
     keys = keys.filter(k => allow.has(k));
   }
-  const tk = todayKey();
+  const today = todayKey();
   const html = keys.map(k => {
     const items = S.days[k].map(it => {
       const a = actById(it.id);
@@ -212,9 +273,13 @@ function renderJournal(){
           ${cat ? `<div class="day__item__cat">${cat}</div>` : ''}
         </div>`;
     }).join('');
-    const rel = k === tk ? ' · сегодня' : '';
-    return `<div class="day">
-      <div class="day__head"><span class="day__date">${esc(fmtDate(k))}${esc(rel)}</span></div>
+    const dl = dayLabel(k);
+    const rel = k === today ? ' · сегодня' : (k > today ? ' · план' : '');
+    const full = fmtDate(k);
+    const wd = full.split(', ').slice(1).join(', ');
+    const head = dl ? `${dl}, ${full.split(', ')[0]}, ${wd}` : full;
+    return `<div class="day ${k > today ? 'day--future' : ''}">
+      <div class="day__head"><span class="day__date">${esc(head)}${esc(rel)}</span></div>
       <div class="day__items">${items}</div>
     </div>`;
   }).join('');
@@ -265,10 +330,45 @@ function render(){
   renderStatusChips();
   renderGames();
   renderRecent();
+  renderPlan();
   renderJournal();
   renderStats();
+  renderDateBar();
   const d = new Date();
   $('#todayLine').textContent = `${d.getDate()} ${MONTHS[d.getMonth()]} · ${DOW[d.getDay()]}`;
+}
+
+function renderDateBar(){
+  const k = ui.date;
+  const today = todayKey();
+  const [y,m,d] = k.split('-').map(Number);
+  const wd = DOW[new Date(y, m-1, d).getDay()];
+  const dl = dayLabel(k);
+  $('#dateMain').textContent = dl || `${d} ${MONTHS[m-1]}`;
+  $('#dateSub').textContent = dl ? wd : `${d} ${MONTHS[m-1]}, ${wd}`;
+  $('#datePick').value = k;
+
+  const mark = document.querySelector('#datePick');
+  if(mark){
+    mark.max = shiftDate(today, 365);
+    mark.min = shiftDate(today, -365);
+  }
+
+  // подсветка активной быстрой кнопки
+  $$('#dateQuick .chip').forEach(ch => {
+    const q = ch.dataset.qd;
+    let target = null;
+    if(q === 'today') target = today;
+    else if(q === 'yesterday') target = shiftDate(today,-1);
+    else if(q === 'tomorrow') target = shiftDate(today,1);
+    else if(q === 'week') target = shiftDate(today,7);
+    ch.classList.toggle('is-on', target === k);
+  });
+}
+
+function setDate(k){
+  ui.date = k;
+  render();
 }
 
 /* ---------- sheets ---------- */
@@ -280,13 +380,18 @@ function openActSheet(id){
   if(!a) return;
   ui.actId = id;
   const c = catById(a.cat);
-  const tk = todayKey();
+  const tk = ui.date;
   const rec = (S.days[tk] || []).find(x => x.id === id);
+  const future = isFuture(tk);
 
   $('#sheetTitle').textContent = a.name;
-  $('#sheetCat').textContent = c ? c.name : '';
-  $('#btnMarkPlayed').textContent = rec ? '✓ Убрать отметку' : 'Отметить как сыгранное';
+  $('#sheetCat').textContent = (c ? c.name : '') + ' · ' + dateFullLabel(tk);
+  $('#lblPlayed').textContent = future ? 'План на эту дату' : 'Отметка';
+  $('#btnMarkPlayed').textContent = rec
+    ? (future ? '✓ Убрать из плана' : '✓ Убрать отметку')
+    : (future ? 'Запланировать' : 'Отметить как сыгранное');
   $('#btnMarkPlayed').classList.toggle('btn--primary', !rec);
+  $('#lblNote').textContent = future ? 'Заметка к плану' : 'Что получилось';
   $('#noteBlock').hidden = !rec;
   $('#noteInput').value = rec ? (rec.note || '') : '';
   renderSheetStatuses(a.status);
@@ -301,7 +406,7 @@ function renderSheetStatuses(current){
 
 /* ---------- actions ---------- */
 function togglePlayed(id){
-  const tk = todayKey();
+  const tk = ui.date;
   if(!S.days[tk]) S.days[tk] = [];
   const arr = S.days[tk];
   const i = arr.findIndex(x => x.id === id);
@@ -425,10 +530,31 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   if(e.target.id === 'search'){ ui.q = e.target.value; renderGames(); }
   if(e.target.id === 'noteInput'){
-    const tk = todayKey();
+    const tk = ui.date;
     const rec = (S.days[tk] || []).find(x => x.id === ui.actId);
-    if(rec){ rec.note = e.target.value; save(); renderJournal(); renderStats(); renderRecent(); }
+    if(rec){ rec.note = e.target.value; save(); renderJournal(); renderStats(); renderRecent(); renderPlan(); }
   }
+});
+
+$('#datePrev').addEventListener('click', () => setDate(shiftDate(ui.date, -1)));
+$('#dateNext').addEventListener('click', () => setDate(shiftDate(ui.date, 1)));
+$('#datePick').addEventListener('change', e => {
+  if(e.target.value) setDate(e.target.value);
+});
+$('#dateLabel').addEventListener('click', () => {
+  const pick = $('#datePick');
+  if(typeof pick.showPicker === 'function'){
+    try{ pick.showPicker(); return; }catch(e){}
+  }
+  pick.focus();
+  pick.click();
+});
+document.addEventListener('click', e => {
+  const q = e.target.closest('[data-qd]');
+  if(!q) return;
+  const today = todayKey();
+  const map = { today, yesterday: shiftDate(today,-1), tomorrow: shiftDate(today,1), week: shiftDate(today,7) };
+  if(map[q.dataset.qd]) setDate(map[q.dataset.qd]);
 });
 
 $('#btnExpandAll').addEventListener('click', () => {
@@ -442,9 +568,12 @@ $('#btnExpandAll').addEventListener('click', () => {
 
 $('#btnMarkPlayed').addEventListener('click', () => {
   togglePlayed(ui.actId);
-  const tk = todayKey();
+  const tk = ui.date;
   const rec = (S.days[tk] || []).find(x => x.id === ui.actId);
-  $('#btnMarkPlayed').textContent = rec ? '✓ Убрать отметку' : 'Отметить как сыгранное';
+  const future = isFuture(tk);
+  $('#btnMarkPlayed').textContent = rec
+    ? (future ? '✓ Убрать из плана' : '✓ Убрать отметку')
+    : (future ? 'Запланировать' : 'Отметить как сыгранное');
   $('#btnMarkPlayed').classList.toggle('btn--primary', !rec);
   $('#noteBlock').hidden = !rec;
   if(rec) $('#noteInput').value = rec.note || '';

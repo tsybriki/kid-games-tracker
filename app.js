@@ -10,11 +10,21 @@ const STATUS = {
 const STATUS_ORDER = ['done', 'wip', 'prep', 'rare', 'mastered'];
 
 const KEY = 'kid-games-v1';
+const OPEN_KEY = 'kid-games-open-v1';
 const DOW = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
 const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 
 let S = load();
-let ui = { tab: 'games', cat: 'all', status: 'all', q: '', range: '7', actId: null, newStatus: 'done', newColor: '#b3543f' };
+let ui = {
+  tab: 'games',
+  status: 'all',
+  q: '',
+  range: '7',
+  actId: null,
+  newStatus: 'done',
+  newColor: '#b3543f'
+};
+let openCats = loadOpen();
 
 /* ---------- storage ---------- */
 function load(){
@@ -32,6 +42,16 @@ function load(){
 function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e){ toast('Не удалось сохранить'); }
+}
+function loadOpen(){
+  try{
+    const raw = localStorage.getItem(OPEN_KEY);
+    if(raw) return new Set(JSON.parse(raw));
+  }catch(e){}
+  return new Set();
+}
+function saveOpen(){
+  try{ localStorage.setItem(OPEN_KEY, JSON.stringify(Array.from(openCats))); }catch(e){}
 }
 
 /* ---------- helpers ---------- */
@@ -51,6 +71,10 @@ function fmtDate(key){
   const dt = new Date(y, m-1, d);
   return `${d} ${MONTHS[m-1]}, ${DOW[dt.getDay()]}`;
 }
+function shortDate(key){
+  const [y,m,d] = key.split('-').map(Number);
+  return `${d} ${MONTHS[m-1]}`;
+}
 function daysAgo(n){
   const out = [];
   const d = new Date();
@@ -61,11 +85,10 @@ function daysAgo(n){
   return out;
 }
 
-/* ---------- render: games ---------- */
+/* ---------- render: аккордеон категорий ---------- */
 function renderGames(){
   const q = ui.q.trim().toLowerCase();
   const list = S.activities.filter(a => {
-    if(ui.cat !== 'all' && a.cat !== ui.cat) return false;
     if(ui.status !== 'all' && a.status !== ui.status) return false;
     if(q){
       const c = catById(a.cat);
@@ -83,56 +106,93 @@ function renderGames(){
     groups.get(a.cat).push(a);
   });
 
+  // поиск всегда раскрывает все подходящие категории
+  const searching = q.length > 0;
   const ordered = S.categories.filter(c => groups.has(c.id));
 
   $('#gameList').innerHTML = ordered.map(c => {
     const acts = groups.get(c.id);
-    return `<div class="cat-head">
-        <span class="cat-head__bar" style="background:${c.color}"></span>
-        <span>${esc(c.name)}</span>
-        <span class="cat-head__count">${acts.length}</span>
-      </div>` + acts.map(a => {
-        const st = STATUS[a.status] || STATUS.wip;
-        const played = playedToday.has(a.id);
-        return `<button class="game" data-id="${a.id}" type="button">
-          <span class="game__body">
-            <span class="game__name">${esc(a.name)}</span>
-            <span class="game__meta">
-              <span class="badge badge--${st.cls}">${esc(st.label)}</span>
-              ${played ? '<span class="played"><span class="played__dot"></span>играли сегодня</span>' : ''}
-            </span>
-          </span>
-          <span class="game__check ${played ? 'is-played' : (a.status==='done' ? 'is-done' : '')}" aria-hidden="true"></span>
-        </button>`;
-      }).join('');
+    const isOpen = searching || openCats.has(c.id);
+    const playedCount = acts.filter(a => playedToday.has(a.id)).length;
+
+    const head =
+      `<button class="acc__head" data-toggle="${c.id}" type="button" aria-expanded="${isOpen}">
+        <span class="acc__chevron" aria-hidden="true"></span>
+        <span class="acc__bar" style="background:${c.color}"></span>
+        <span class="acc__name">${esc(c.name)}</span>
+        ${playedCount ? `<span class="acc__today">${playedCount} сегодня</span>` : ''}
+        <span class="acc__count">${acts.length}</span>
+      </button>`;
+
+    const body = acts.map(a => {
+      const st = STATUS[a.status] || STATUS.wip;
+      const played = playedToday.has(a.id);
+      return `<div class="row">
+        <button class="row__mark ${played ? 'is-on' : ''}" data-mark="${a.id}" type="button"
+          aria-pressed="${played}" aria-label="${played ? 'Убрать отметку' : 'Отметить как сыгранное'}">
+          <span class="row__tick" aria-hidden="true"></span>
+        </button>
+        <button class="row__main" data-open="${a.id}" type="button">
+          <span class="row__name">${esc(a.name)}</span>
+          <span class="row__status badge badge--${st.cls}">${esc(st.label)}</span>
+        </button>
+      </div>`;
+    }).join('');
+
+    return `<section class="acc__group ${isOpen ? 'is-open' : ''}" data-group="${c.id}">
+      ${head}
+      <div class="acc__body">${body}</div>
+    </section>`;
   }).join('');
 
   $('#gameEmpty').hidden = list.length > 0;
-}
-
-function renderCatChips(){
-  const counts = {};
-  S.activities.forEach(a => counts[a.cat] = (counts[a.cat] || 0) + 1);
-  $('#catChips').innerHTML =
-    `<button class="chip ${ui.cat==='all'?'is-on':''}" data-cat="all" type="button">Все · ${S.activities.length}</button>` +
-    S.categories.map(c =>
-      `<button class="chip ${ui.cat===c.id?'is-on':''}" data-cat="${c.id}" type="button">
-         <span class="chip__dot" style="background:${c.color}"></span>${esc(c.name)} · ${counts[c.id]||0}
-       </button>`).join('');
+  $('#btnExpandAll').textContent = searching ? 'Свернуть' : (ordered.length && ordered.every(c => openCats.has(c.id)) ? 'Свернуть' : 'Развернуть');
 }
 
 function renderStatusChips(){
   const counts = {};
   S.activities.forEach(a => counts[a.status] = (counts[a.status] || 0) + 1);
   $('#statusChips').innerHTML =
-    `<button class="chip ${ui.status==='all'?'is-on':''}" data-st="all" type="button">Любой статус</button>` +
-    STATUS_ORDER.map(k => {
-      const st = STATUS[k];
-      return `<button class="chip ${ui.status===k?'is-on':''}" data-st="${k}" type="button">${esc(st.label)} · ${counts[k]||0}</button>`;
-    }).join('');
+    `<button class="chip ${ui.status==='all'?'is-on':''}" data-st="all" type="button">Все</button>` +
+    STATUS_ORDER.map(k =>
+      `<button class="chip ${ui.status===k?'is-on':''}" data-st="${k}" type="button">${esc(STATUS[k].label)} · ${counts[k]||0}</button>`
+    ).join('');
 }
 
-/* ---------- render: journal ---------- */
+/* ---------- render: последние дни ---------- */
+function renderRecent(){
+  const tk = todayKey();
+  const days = daysAgo(14);
+  const keys = days.filter(k => (S.days[k] || []).length).reverse();
+
+  if(!keys.length){
+    $('#recentList').innerHTML = '';
+    $('#recentEmpty').hidden = false;
+    $('#recentBlock').classList.add('is-empty');
+    return;
+  }
+  $('#recentEmpty').hidden = true;
+  $('#recentBlock').classList.remove('is-empty');
+
+  $('#recentList').innerHTML = keys.map(k => {
+    const items = S.days[k].map(it => {
+      const a = actById(it.id);
+      const c = a ? catById(a.cat) : null;
+      const name = a ? a.name : '(удалённое занятие)';
+      const dot = c ? `<span class="rday__dot" style="background:${c.color}"></span>` : '';
+      const note = it.note ? `<span class="rday__note">${esc(it.note)}</span>` : '';
+      return `<li class="rday__item">${dot}<span class="rday__name">${esc(name)}</span>${note}</li>`;
+    }).join('');
+    const rel = k === tk ? 'Сегодня' : shortDate(k);
+    const wd = k === tk ? '' : DOW[new Date(...k.split('-').map((v,i)=> i===1 ? +v-1 : +v)).getDay()];
+    return `<div class="rday">
+      <div class="rday__date">${esc(rel)}${wd ? ' · ' + esc(wd) : ''}</div>
+      <ul class="rday__items">${items}</ul>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- render: журнал ---------- */
 function renderJournal(){
   let keys = Object.keys(S.days).filter(k => (S.days[k] || []).length).sort().reverse();
   if(ui.range !== 'all'){
@@ -162,9 +222,8 @@ function renderJournal(){
   $('#journalEmpty').hidden = keys.length > 0;
 }
 
-/* ---------- render: stats ---------- */
+/* ---------- render: сводка ---------- */
 function renderStats(){
-  const tk = todayKey();
   const allDays = Object.keys(S.days).filter(k => (S.days[k]||[]).length);
   const playedIds = new Set();
   allDays.forEach(k => S.days[k].forEach(i => playedIds.add(i.id)));
@@ -203,9 +262,9 @@ function renderStats(){
 
 /* ---------- render all ---------- */
 function render(){
-  renderCatChips();
   renderStatusChips();
   renderGames();
+  renderRecent();
   renderJournal();
   renderStats();
   const d = new Date();
@@ -222,8 +281,7 @@ function openActSheet(id){
   ui.actId = id;
   const c = catById(a.cat);
   const tk = todayKey();
-  const day = S.days[tk] || [];
-  const rec = day.find(x => x.id === id);
+  const rec = (S.days[tk] || []).find(x => x.id === id);
 
   $('#sheetTitle').textContent = a.name;
   $('#sheetCat').textContent = c ? c.name : '';
@@ -262,12 +320,17 @@ function setStatus(id, st){
 
 function addActivity(name, catId, status){
   S.activities.push({ id: uid('a'), cat: catId, name: name.trim(), status, note: '' });
+  openCats.add(catId);
+  saveOpen();
   save(); render();
   toast('Добавлено');
 }
 
 function addCategory(name, color){
-  S.categories.push({ id: uid('c'), name: name.trim(), color });
+  const id = uid('c');
+  S.categories.push({ id, name: name.trim(), color });
+  openCats.add(id);
+  saveOpen();
   save(); render();
   toast('Категория добавлена');
 }
@@ -308,8 +371,27 @@ document.addEventListener('click', e => {
     return;
   }
 
-  const chip = e.target.closest('.chip[data-cat]');
-  if(chip){ ui.cat = chip.dataset.cat; renderGames(); renderCatChips(); return; }
+  // раскрыть/свернуть категорию
+  const head = e.target.closest('.acc__head');
+  if(head){
+    const id = head.dataset.toggle;
+    if(openCats.has(id)) openCats.delete(id); else openCats.add(id);
+    saveOpen();
+    renderGames();
+    return;
+  }
+
+  // отметить игру — одним тапом по кружку
+  const mark = e.target.closest('[data-mark]');
+  if(mark){
+    e.stopPropagation();
+    togglePlayed(mark.dataset.mark);
+    return;
+  }
+
+  // открыть карточку занятия (заметка, статус)
+  const open = e.target.closest('[data-open]');
+  if(open){ openActSheet(open.dataset.open); return; }
 
   const stChip = e.target.closest('.chip[data-st]');
   if(stChip){ ui.status = stChip.dataset.st; renderGames(); renderStatusChips(); return; }
@@ -328,9 +410,6 @@ document.addEventListener('click', e => {
   const dot = e.target.closest('.color-dot');
   if(dot){ ui.newColor = dot.dataset.color; renderColorPick(); return; }
 
-  const game = e.target.closest('.game');
-  if(game){ openActSheet(game.dataset.id); return; }
-
   const seg = e.target.closest('.seg-btn');
   if(seg){
     $$('.seg-btn').forEach(s => s.classList.remove('is-active'));
@@ -348,8 +427,17 @@ document.addEventListener('input', e => {
   if(e.target.id === 'noteInput'){
     const tk = todayKey();
     const rec = (S.days[tk] || []).find(x => x.id === ui.actId);
-    if(rec){ rec.note = e.target.value; save(); renderJournal(); renderStats(); }
+    if(rec){ rec.note = e.target.value; save(); renderJournal(); renderStats(); renderRecent(); }
   }
+});
+
+$('#btnExpandAll').addEventListener('click', () => {
+  const all = S.categories.map(c => c.id);
+  const allOpen = all.every(id => openCats.has(id));
+  if(allOpen) all.forEach(id => openCats.delete(id));
+  else all.forEach(id => openCats.add(id));
+  saveOpen();
+  renderGames();
 });
 
 $('#btnMarkPlayed').addEventListener('click', () => {

@@ -33,12 +33,23 @@
 <main>
   <!-- ============ ИГРЫ ============ -->
   <section id="view-games" class="view is-active">
+
     <div class="filters">
       <input id="search" class="search" type="search" placeholder="Поиск занятия…" autocomplete="off" enterkeyhint="search">
-      <div id="catChips" class="chips" role="group" aria-label="Фильтр по категориям"></div>
-      <div id="statusChips" class="chips chips--status" role="group" aria-label="Фильтр по статусу"></div>
+      <div class="toolrow">
+        <div id="statusChips" class="chips chips--scroll" role="group" aria-label="Фильтр по статусу"></div>
+        <button id="btnExpandAll" class="linkbtn" type="button">Развернуть</button>
+      </div>
     </div>
-    <div id="gameList" class="game-list"></div>
+
+    <!-- что играли в последние дни -->
+    <section id="recentBlock" class="recent">
+      <h2 class="recent__title">В последние дни</h2>
+      <div id="recentList" class="recent__list"></div>
+      <p id="recentEmpty" class="recent__empty">Пока ничего не отмечено. Раскройте категорию и нажмите на кружок рядом с игрой.</p>
+    </section>
+
+    <div id="gameList" class="acc"></div>
     <p id="gameEmpty" class="empty" hidden>Ничего не найдено. Попробуйте другой фильтр или добавьте занятие.</p>
   </section>
 
@@ -106,7 +117,7 @@
   </div>
 </div>
 
-<!-- ============ SHEET: новое занятие / категория ============ -->
+<!-- ============ SHEET: новое занятие ============ -->
 <div id="sheet2" class="sheet" hidden>
   <div class="sheet-backdrop" data-close></div>
   <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet2Title">
